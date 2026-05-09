@@ -847,6 +847,7 @@ impl CodeEditorModel {
                 | BlockItem::UnorderedList { .. }
                 | BlockItem::OrderedList { .. }
                 | BlockItem::Header { .. }
+                | BlockItem::Blockquote { .. }
                 | BlockItem::Embedded(_)
                 | BlockItem::HorizontalRule(_)
                 | BlockItem::Image { .. }

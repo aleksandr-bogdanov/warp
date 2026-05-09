@@ -18,7 +18,7 @@ use super::{
 
 // Minimum size constraint for the bullet point. If the size is smaller than the constraint,
 // the svg won't render.
-const MIN_BULLET_POINT_SIZE: f32 = 6.;
+const MIN_BULLET_POINT_SIZE: f32 = 3.;
 
 pub struct RenderableBulletList {
     viewport_item: ViewportItem,
@@ -53,7 +53,7 @@ impl RenderableBulletList {
         Self {
             viewport_item,
             bullet_point,
-            bullet_size: (styles.base_text.font_size / 2.).max(MIN_BULLET_POINT_SIZE),
+            bullet_size: (styles.base_text.font_size / 3.5).max(MIN_BULLET_POINT_SIZE),
             placeholder: BlockPlaceholder::new(true),
         }
     }

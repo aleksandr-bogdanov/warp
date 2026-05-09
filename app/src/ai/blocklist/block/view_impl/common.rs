@@ -2447,6 +2447,7 @@ fn render_table_section(
             column_dividers: table_appearance.column_dividers,
             row_dividers: table_appearance.row_dividers,
             cell_padding,
+            cell_padding_y: cell_padding,
             header_background: table_appearance.header_background,
             row_background: warpui::elements::RowBackground {
                 primary: table_appearance.cell_background,

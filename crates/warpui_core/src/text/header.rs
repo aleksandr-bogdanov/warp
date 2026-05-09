@@ -21,7 +21,7 @@ impl BlockHeaderSize {
         match self {
             Self::Header1 => 2.25,
             Self::Header2 => 1.8,
-            Self::Header3 => 1.5,
+            Self::Header3 => 1.3,
             Self::Header4 => 1.0,
             Self::Header5 => 0.83,
             Self::Header6 => 0.67,
@@ -32,7 +32,7 @@ impl BlockHeaderSize {
     pub fn font_weight(self) -> Option<CustomWeight> {
         match self {
             Self::Header1 | Self::Header2 | Self::Header3 | Self::Header4 => {
-                Some(CustomWeight::Semibold)
+                Some(CustomWeight::Bold)
             }
             Self::Header5 | Self::Header6 => None,
         }

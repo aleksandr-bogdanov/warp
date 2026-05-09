@@ -56,6 +56,43 @@ fn test_parse_single_line() {
 }
 
 #[test]
+fn test_parse_blockquote() {
+    // A simple blockquote — leading `>` and whitespace are stripped.
+    assert_eq!(
+        test_parse_markdown("> A quote"),
+        vec![FormattedTextLine::Blockquote(vec![
+            FormattedTextFragment::plain_text("A quote")
+        ])]
+    );
+
+    // No space after `>` is also valid blockquote syntax.
+    assert_eq!(
+        test_parse_markdown(">no space"),
+        vec![FormattedTextLine::Blockquote(vec![
+            FormattedTextFragment::plain_text("no space")
+        ])]
+    );
+
+    // Inline formatting inside the quote is preserved.
+    assert_eq!(
+        test_parse_markdown("> **bold** and *italic*"),
+        vec![FormattedTextLine::Blockquote(vec![
+            FormattedTextFragment::bold("bold"),
+            FormattedTextFragment::plain_text(" and "),
+            FormattedTextFragment::italic("italic"),
+        ])]
+    );
+
+    // A `>` mid-line does NOT trigger a blockquote — only at line start.
+    assert_eq!(
+        test_parse_markdown("a > b"),
+        vec![FormattedTextLine::Line(vec![
+            FormattedTextFragment::plain_text("a > b")
+        ])]
+    );
+}
+
+#[test]
 fn test_parse_headers() {
     let source = "# This is a header";
     assert_eq!(

@@ -1299,6 +1299,7 @@ fn make_test_laid_out_table() -> LaidOutTable {
                 font_family: FamilyId(0),
                 font_size: 10.0,
                 cell_padding: 0.0,
+                cell_padding_y: 0.0,
                 outer_border: true,
                 column_dividers: true,
                 row_dividers: true,
@@ -1428,4 +1429,55 @@ fn test_link_at_offset_uses_cached_cell_links() {
     );
     assert_eq!(table.link_at_offset(CharOffset::from(0)), None);
     assert_eq!(table.link_at_offset(CharOffset::from(3)), None);
+}
+
+#[test]
+fn test_from_block_style_dispatches_per_header_level() {
+    use crate::content::text::BlockHeaderSize;
+    let spacings = DEFAULT_BLOCK_SPACINGS;
+
+    // H1 and H2 use the canonical `header` spacing (large pre-gap).
+    assert_eq!(
+        spacings.from_block_style(&BufferBlockStyle::Header {
+            header_size: BlockHeaderSize::Header1
+        }),
+        spacings.header
+    );
+    assert_eq!(
+        spacings.from_block_style(&BufferBlockStyle::Header {
+            header_size: BlockHeaderSize::Header2
+        }),
+        spacings.header
+    );
+
+    // H3 falls into the tighter `small_header` tier.
+    assert_eq!(
+        spacings.from_block_style(&BufferBlockStyle::Header {
+            header_size: BlockHeaderSize::Header3
+        }),
+        spacings.small_header
+    );
+
+    // H4-H6 are body-sized and use `tiny_header` (symmetric near-body gap).
+    for header_size in [
+        BlockHeaderSize::Header4,
+        BlockHeaderSize::Header5,
+        BlockHeaderSize::Header6,
+    ] {
+        assert_eq!(
+            spacings.from_block_style(&BufferBlockStyle::Header { header_size }),
+            spacings.tiny_header,
+            "{header_size:?} should use tiny_header spacing"
+        );
+    }
+}
+
+#[test]
+fn test_from_block_style_blockquote_uses_dedicated_spacing() {
+    let spacings = DEFAULT_BLOCK_SPACINGS;
+    let blockquote_spacing = spacings.from_block_style(&BufferBlockStyle::Blockquote);
+    assert_eq!(blockquote_spacing, spacings.blockquote);
+    // Blockquote should not be styled as plain text — the dedicated spacing
+    // exists precisely so the renderer can paint a left bar + bg around it.
+    assert_ne!(blockquote_spacing, spacings.text);
 }

@@ -9,7 +9,7 @@ pub mod model;
 /// painting, so it's defined here.
 pub const ICON_BUTTON_SIZE: f32 = 24.;
 pub const BLOCK_FOOTER_HEIGHT: f32 = 42.;
-pub(crate) const TABLE_LINE_HEIGHT_RATIO: f32 = 1.5;
+pub(crate) const TABLE_LINE_HEIGHT_RATIO: f32 = 1.05;
 pub(crate) const TABLE_BASELINE_RATIO: f32 = 0.8;
 
 #[cfg(test)]

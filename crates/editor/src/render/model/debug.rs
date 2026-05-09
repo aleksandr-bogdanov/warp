@@ -114,6 +114,7 @@ impl Describe for BlockItem {
                 write!(f, "Ordered List @ {indent_level}")?
             }
             BlockItem::Header { header_size, .. } => write!(f, "{header_size:?}")?,
+            BlockItem::Blockquote { .. } => f.write_str("Blockquote")?,
             BlockItem::HorizontalRule(_) => f.write_str("Horizontal Rule")?,
             BlockItem::Image { alt_text, .. } => write!(f, "Image: {alt_text}")?,
             BlockItem::Table(laid_out_table) => write!(

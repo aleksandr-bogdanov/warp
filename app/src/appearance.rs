@@ -297,6 +297,17 @@ fn load_default_monospace_font_family(ctx: &mut AppContext) -> anyhow::Result<Fa
                 .ok_or_else(|| anyhow!("monospace font has no 'm' glyph"))?
                 .0,
         )?;
+
+        // On macOS, prefer Lilex (open-source, popular for code), then SF Mono
+        // (Apple's system mono — may not be loadable by sandboxed apps), then
+        // Menlo (always available). Falls back to bundled Hack if none load.
+        #[cfg(target_os = "macos")]
+        for candidate in &["Lilex", "SF Mono", "Menlo"] {
+            if let Ok(font_family_id) = font_cache.load_system_font(candidate) {
+                return Ok(font_family_id);
+            }
+        }
+
         Ok(default_monospace_font_family)
     })
 }
@@ -331,6 +342,14 @@ fn load_default_ui_font_family(ctx: &mut AppContext) -> anyhow::Result<FamilyId>
         // any reason we fallback to using our normal bundled font.
         #[cfg(windows)]
         if let Ok(font_family_id) = font_cache.load_system_font("Segoe UI") {
+            return Ok(font_family_id);
+        }
+
+        // On macOS, prefer system Helvetica — the platform standard for body
+        // text, also what JCEF-based markdown previews render with by default.
+        // Falls back to bundled Roboto if Helvetica isn't loadable.
+        #[cfg(target_os = "macos")]
+        if let Ok(font_family_id) = font_cache.load_system_font("Helvetica") {
             return Ok(font_family_id);
         }
 

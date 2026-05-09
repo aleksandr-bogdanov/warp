@@ -1,5 +1,6 @@
 use super::{
-    BlockLocation, LayOutArgs, layout_mermaid_diagram_block, layout_table_block, layout_text_block,
+    BlockLocation, LayOutArgs, ListPosition, layout_mermaid_diagram_block, layout_table_block,
+    layout_text_block,
 };
 use crate::{
     content::{
@@ -421,7 +422,13 @@ fn test_layout_text_block_uses_rich_table_when_flag_enabled() {
             };
 
             let (item, has_trailing_newline) =
-                layout_text_block(block, &text_layout, BlockLocation::Middle, false)
+                layout_text_block(
+                    block,
+                    &text_layout,
+                    BlockLocation::Middle,
+                    false,
+                    ListPosition::NotInList,
+                )
                     .expect("table layout should succeed");
 
             assert!(matches!(item, BlockItem::Table(_)));
@@ -454,7 +461,13 @@ fn test_layout_text_block_uses_plain_text_when_flag_disabled() {
             };
 
             let (item, _has_trailing_newline) =
-                layout_text_block(block, &text_layout, BlockLocation::Middle, false)
+                layout_text_block(
+                    block,
+                    &text_layout,
+                    BlockLocation::Middle,
+                    false,
+                    ListPosition::NotInList,
+                )
                     .expect("table layout should succeed");
 
             assert!(matches!(item, BlockItem::Paragraph(_)));

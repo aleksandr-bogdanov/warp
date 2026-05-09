@@ -37,8 +37,9 @@ use crate::{content::version::BufferVersion, editor::EditorView};
 use string_offset::CharOffset;
 
 use self::{
-    empty::Empty, header::RenderableHeader, hidden_section::RenderableHiddenSection,
-    horizontal_rule::HorizontalRule, image::RenderableImage, mermaid::RenderableMermaidDiagram,
+    blockquote::RenderableBlockquote, empty::Empty, header::RenderableHeader,
+    hidden_section::RenderableHiddenSection, horizontal_rule::HorizontalRule,
+    image::RenderableImage, mermaid::RenderableMermaidDiagram,
     ordered_list::RenderableOrderedListItem, paragraph::RenderableParagraph,
     runnable_command::RenderableRunnableCommand, table::RenderableTable,
     task_list::RenderableTaskList, text_block::RenderableTextBlock,
@@ -47,6 +48,7 @@ use self::{
 
 pub use self::paint::{CursorData, CursorDisplayType, RenderContext};
 
+mod blockquote;
 pub mod broken_embedding;
 mod empty;
 mod header;
@@ -848,6 +850,7 @@ impl<V: EditorView> RichTextElement<V> {
                     BlockItem::Paragraph(_) => RenderableParagraph::new(item).finish(),
                     BlockItem::TextBlock { .. } => RenderableTextBlock::new(item).finish(),
                     BlockItem::Header { .. } => RenderableHeader::new(item).finish(),
+                    BlockItem::Blockquote { .. } => RenderableBlockquote::new(item).finish(),
                     BlockItem::UnorderedList { indent_level, .. } => {
                         RenderableBulletList::new(*indent_level, styles, item).finish()
                     }

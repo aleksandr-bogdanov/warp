@@ -222,6 +222,9 @@ pub struct TableConfig {
     pub row_dividers: bool,
     /// Padding applied uniformly to all sides of each cell (top, right, bottom, left).
     pub cell_padding: f32,
+    /// Vertical cell padding (top/bottom). Allows tables with looser horizontal
+    /// breathing but tighter row heights, matching IDEA's table rhythm.
+    pub cell_padding_y: f32,
     /// Background color for the header row.
     pub header_background: ColorU,
     /// Background colors for data rows.
@@ -250,6 +253,7 @@ impl Default for TableConfig {
             column_dividers: true,
             row_dividers: false,
             cell_padding: 8.0,
+            cell_padding_y: 8.0,
             header_background: header_background_light_gray,
             row_background: RowBackground::default(),
             fixed_header: false,

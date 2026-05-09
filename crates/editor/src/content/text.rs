@@ -210,7 +210,8 @@ fn parse_table_cell_markdown_inline(cell: &str) -> FormattedTextInline {
     let mut inline = Vec::new();
     for line in parsed.lines {
         match line {
-            FormattedTextLine::Line(fragments) => inline.extend(fragments),
+            FormattedTextLine::Line(fragments)
+            | FormattedTextLine::Blockquote(fragments) => inline.extend(fragments),
             FormattedTextLine::Heading(header) => inline.extend(header.text),
             FormattedTextLine::OrderedList(item) => inline.extend(item.indented_text.text),
             FormattedTextLine::UnorderedList(item) => inline.extend(item.text),
@@ -633,6 +634,7 @@ impl Display for BufferText {
                         write!(f, "code:{code_block_type}")?;
                     }
                     BufferBlockStyle::PlainText => f.write_str("text")?,
+                    BufferBlockStyle::Blockquote => f.write_str("blockquote")?,
                     BufferBlockStyle::Header { header_size } => {
                         write!(f, "header{}", Into::<usize>::into(*header_size))?;
                     }
@@ -876,6 +878,9 @@ pub enum BufferBlockStyle {
         complete: bool,
     },
     PlainText,
+    /// A blockquote line (originally `> ...` in markdown). Rendered with a
+    /// left-indent + accent bar in the renderer to give visual distinction.
+    Blockquote,
     Header {
         header_size: BlockHeaderSize,
     },
@@ -924,9 +929,10 @@ impl BufferBlockStyle {
                     number: None,
                 })
             }
-            Self::PlainText | Self::CodeBlock { .. } | Self::Table { .. } => {
-                BlockLineBreakBehavior::NewLine
-            }
+            Self::PlainText
+            | Self::Blockquote
+            | Self::CodeBlock { .. }
+            | Self::Table { .. } => BlockLineBreakBehavior::NewLine,
         }
     }
 
@@ -940,9 +946,10 @@ impl BufferBlockStyle {
         match self {
             // For plain text and runnable code blocks, always inherit the previous block's styling if
             // the cursor is not at buffer start.
-            Self::PlainText | Self::CodeBlock { .. } | Self::Table { .. } => {
-                edit_cursor != CursorType::BufferStart
-            }
+            Self::PlainText
+            | Self::Blockquote
+            | Self::CodeBlock { .. }
+            | Self::Table { .. } => edit_cursor != CursorType::BufferStart,
             // For other non-plain text blocks, inherit the previous block's styling if
             // 1) The block styling is different.
             // 2) The cursor is either inline or in a runnable code block.
@@ -962,6 +969,7 @@ impl BufferBlockStyle {
     pub fn allows_formatting(&self) -> bool {
         match self {
             Self::PlainText
+            | Self::Blockquote
             | Self::Header { .. }
             | Self::UnorderedList { .. }
             | Self::OrderedList { .. }

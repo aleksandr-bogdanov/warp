@@ -17,9 +17,51 @@ use warpui::{
 };
 
 use super::{
-    BlockItem, BrokenLinkStyle, CheckBoxStyle, DEFAULT_BLOCK_SPACINGS, HorizontalRuleStyle,
-    InlineCodeStyle, OffsetMap, PARAGRAPH_MIN_HEIGHT, Paragraph, ParagraphStyles, RichTextStyles,
-    TEXT_SPACING, TableStyle,
+    BlockItem, BlockSpacing, BlockSpacings, BrokenLinkStyle, CheckBoxStyle, COMMAND_SPACING,
+    HorizontalRuleStyle, IndentableBlockSpacing, InlineCodeStyle, OffsetMap, PARAGRAPH_MIN_HEIGHT,
+    Paragraph, ParagraphStyles, RichTextStyles, TableStyle,
+};
+use warpui::elements::{Margin, Padding};
+
+/// Stable block spacings for tests. Production code uses DEFAULT_BLOCK_SPACINGS
+/// which includes per-level header tiers and asymmetric blockquote padding —
+/// values that may evolve as we tune visual rhythm. Tests assert on layout
+/// positions/heights, so they need a stable baseline that doesn't shift with
+/// taste-driven constant changes.
+const TEST_TEXT_SPACING: BlockSpacing = BlockSpacing {
+    margin: Margin::uniform(4.).with_right(16.),
+    padding: Padding::uniform(0.),
+};
+
+const TEST_HEADER_SPACING: BlockSpacing = BlockSpacing {
+    margin: Margin::uniform(4.)
+        .with_top(12.)
+        .with_bottom(12.)
+        .with_right(16.),
+    padding: Padding::uniform(0.),
+};
+
+const TEST_LIST_MARGIN: Margin = Margin::uniform(4.).with_right(16.);
+
+pub(super) const TEST_BLOCK_SPACINGS: BlockSpacings = BlockSpacings {
+    text: TEST_TEXT_SPACING,
+    header: TEST_HEADER_SPACING,
+    small_header: TEST_HEADER_SPACING,
+    tiny_header: TEST_HEADER_SPACING,
+    blockquote: TEST_TEXT_SPACING,
+    code_block: COMMAND_SPACING,
+    task_list: IndentableBlockSpacing {
+        margin: TEST_LIST_MARGIN,
+        unit_padding: 20.,
+    },
+    ordered_list: IndentableBlockSpacing {
+        margin: TEST_LIST_MARGIN,
+        unit_padding: 20.,
+    },
+    unordered_list: IndentableBlockSpacing {
+        margin: TEST_LIST_MARGIN,
+        unit_padding: 20.,
+    },
 };
 
 pub const TEST_BASELINE_OFFSET: f32 = 0.7;
@@ -50,7 +92,7 @@ pub fn mock_paragraph(height: f32, width: f32, content_length: usize) -> BlockIt
         Arc::new(frame),
         OffsetMap::direct(content_length),
         content_length.into(),
-        TEXT_SPACING,
+        TEST_TEXT_SPACING,
         Some(PARAGRAPH_MIN_HEIGHT),
     )
 }
@@ -163,6 +205,8 @@ pub const TEST_STYLES: RichTextStyles = RichTextStyles {
         fixed_width_tab_size: Some(4),
     },
     code_background: Fill::None,
+    blockquote_background: Fill::None,
+    blockquote_bar_color: Fill::None,
     embedding_background: Fill::None,
     embedding_text: ParagraphStyles {
         font_family: FamilyId(0),
@@ -197,7 +241,7 @@ pub const TEST_STYLES: RichTextStyles = RichTextStyles {
         icon_path: "bundled/svg/link-broken-02.svg",
         icon_color: WHITE,
     },
-    block_spacings: DEFAULT_BLOCK_SPACINGS,
+    block_spacings: TEST_BLOCK_SPACINGS,
     show_placeholder_text_on_empty_block: false,
     minimum_paragraph_height: Some(PARAGRAPH_MIN_HEIGHT),
     cursor_width: 1.,
@@ -214,6 +258,7 @@ pub const TEST_STYLES: RichTextStyles = RichTextStyles {
         font_family: FamilyId(0),
         font_size: 10.,
         cell_padding: 8.0,
+        cell_padding_y: 8.0,
         outer_border: true,
         column_dividers: true,
         row_dividers: true,
