@@ -1117,17 +1117,12 @@ fn layout_text_block(
                 .map(BlockItem::Paragraph)
                 .ok_or_else(|| anyhow!("Plain text item should have one paragraph"))
         }
-        BufferBlockStyle::Blockquote => {
-            debug_assert_eq!(
-                paragraphs.len(),
-                1,
-                "Blockquote paragraphs should only have one line."
-            );
-            paragraphs
-                .pop()
-                .map(|paragraph| BlockItem::Blockquote { paragraph })
-                .ok_or_else(|| anyhow!("Blockquote item should have one paragraph"))
-        }
+        BufferBlockStyle::Blockquote => Vec1::try_from_vec(paragraphs)
+            .ok()
+            .map(|p| BlockItem::Blockquote {
+                paragraph_block: ParagraphBlock::new(p),
+            })
+            .ok_or_else(|| anyhow!("Blockquote item should have at least one paragraph")),
         BufferBlockStyle::Table { .. } => paragraphs
             .pop()
             .map(BlockItem::Paragraph)

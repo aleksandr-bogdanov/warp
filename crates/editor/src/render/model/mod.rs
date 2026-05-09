@@ -865,10 +865,11 @@ pub enum BlockItem {
         paragraph: Paragraph,
     },
     /// A blockquote (originally `> ...` in markdown). Rendered with a left
-    /// accent bar and optional background fill via `RenderableBlockquote`,
-    /// while delegating text rendering to the inner Paragraph.
+    /// accent bar and optional background fill via `RenderableBlockquote`.
+    /// Uses `ParagraphBlock` so consecutive `>` lines coalesce into a single
+    /// quote with one continuous bar (mirrors RunnableCodeBlock pattern).
     Blockquote {
-        paragraph: Paragraph,
+        paragraph_block: ParagraphBlock,
     },
     Embedded(Arc<dyn LaidOutEmbeddedItem>),
     HorizontalRule(HorizontalRuleConfig),
@@ -3546,9 +3547,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::TaskList { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
-            | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.first_line_height(),
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.first_line_height(),
+            | BlockItem::OrderedList { paragraph, .. } => paragraph.first_line_height(),
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.first_line_height(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             }
@@ -3571,9 +3572,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::TaskList { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
-            | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.spacing(),
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.spacing(),
+            | BlockItem::OrderedList { paragraph, .. } => paragraph.spacing(),
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.spacing(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             }
@@ -3600,11 +3601,11 @@ impl BlockItem {
                 }
                 height
             }
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.height(),
+            BlockItem::TextBlock { paragraph_block }
+            | BlockItem::Blockquote { paragraph_block } => paragraph_block.height(),
             BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.height(),
+            | BlockItem::TaskList { paragraph, .. } => paragraph.height(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             }
@@ -3633,9 +3634,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.width(),
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.width(),
+            | BlockItem::TaskList { paragraph, .. } => paragraph.width(),
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.width(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             }
@@ -3667,9 +3668,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.content_length,
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.content_length(),
+            | BlockItem::TaskList { paragraph, .. } => paragraph.content_length,
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.content_length(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => paragraph_block.content_length(),
@@ -3690,9 +3691,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.lines(),
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.lines(),
+            | BlockItem::TaskList { paragraph, .. } => paragraph.lines(),
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.lines(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => paragraph_block.lines(),
@@ -3715,9 +3716,9 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. }
-            | BlockItem::Blockquote { paragraph } => paragraph.is_empty(),
-            BlockItem::TextBlock { paragraph_block } => paragraph_block.is_empty(),
+            | BlockItem::TaskList { paragraph, .. } => paragraph.is_empty(),
+            BlockItem::Blockquote { paragraph_block }
+            | BlockItem::TextBlock { paragraph_block } => paragraph_block.is_empty(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => paragraph_block.is_empty(),
@@ -3768,8 +3769,14 @@ impl Positioned<'_, BlockItem> {
             BlockItem::Header {
                 paragraph: inner, ..
             } => self.header(inner).softwrap_point_to_offset(point),
-            BlockItem::Blockquote { paragraph } => {
-                self.blockquote(paragraph).softwrap_point_to_offset(point)
+            BlockItem::Blockquote { paragraph_block } => {
+                let blockquote = self.blockquote(paragraph_block);
+                let mut paragraphs = blockquote.paragraphs();
+                paragraphs
+                    .find(|paragraph| paragraph.end_line().as_u32() > point.row())
+                    .map_or(self.end_char_offset(), |paragraph| {
+                        paragraph.softwrap_point_to_offset(point)
+                    })
             }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3830,8 +3837,15 @@ impl Positioned<'_, BlockItem> {
             BlockItem::Header { paragraph, .. } => {
                 self.header(paragraph).offset_to_softwrap_point(offset)
             }
-            BlockItem::Blockquote { paragraph } => {
-                self.blockquote(paragraph).offset_to_softwrap_point(offset)
+            BlockItem::Blockquote { paragraph_block } => {
+                let blockquote = self.blockquote(paragraph_block);
+                let mut paragraphs = blockquote.paragraphs();
+                paragraphs
+                    .find(|paragraph| paragraph.end_char_offset() > offset)
+                    .map_or(
+                        SoftWrapPoint::new(self.end_line().as_u32(), Pixels::zero()),
+                        |paragraph| paragraph.offset_to_softwrap_point(offset),
+                    )
             }
             BlockItem::TaskList { paragraph, .. } => {
                 self.task_list(paragraph).offset_to_softwrap_point(offset)
@@ -3894,8 +3908,12 @@ impl Positioned<'_, BlockItem> {
                 self.task_list(paragraph).character_bounds(offset)
             }
             BlockItem::Header { paragraph, .. } => self.header(paragraph).character_bounds(offset),
-            BlockItem::Blockquote { paragraph } => {
-                self.blockquote(paragraph).character_bounds(offset)
+            BlockItem::Blockquote { paragraph_block } => {
+                let blockquote = self.blockquote(paragraph_block);
+                blockquote
+                    .paragraphs()
+                    .find_or_last(|paragraph| paragraph.end_char_offset() > offset)
+                    .and_then(|paragraph| paragraph.character_bounds(offset))
             }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3961,8 +3979,8 @@ impl Positioned<'_, BlockItem> {
                 self.ordered_list(paragraph).first_line_bounds()?
             }
             BlockItem::Header { paragraph, .. } => self.header(paragraph).first_line_bounds()?,
-            BlockItem::Blockquote { paragraph } => {
-                self.blockquote(paragraph).first_line_bounds()?
+            BlockItem::Blockquote { paragraph_block } => {
+                self.blockquote(paragraph_block).first_line_bounds()?
             }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..

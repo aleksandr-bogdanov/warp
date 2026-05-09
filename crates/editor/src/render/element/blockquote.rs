@@ -11,12 +11,14 @@ use super::{RenderContext, RenderableBlock, placeholder::BlockPlaceholder};
 const BLOCKQUOTE_BAR_WIDTH: f32 = 3.;
 
 /// Renders a blockquote block: a left accent bar + optional background fill,
-/// with text rendered via the inner [`Paragraph`] (delegating typography to
-/// the standard rich-text path so blockquotes inherit body font/spacing).
+/// with text rendered via the inner [`ParagraphBlock`] (delegating typography
+/// to the standard rich-text path so blockquotes inherit body font/spacing).
 ///
 /// Mirrors the pattern of [`RenderableRunnableCommand`] (bg + border + content)
 /// and [`RenderableBulletList`] (decorative shape + text), keeping each block
-/// type's visual treatment in its own dedicated render element.
+/// type's visual treatment in its own dedicated render element. Uses
+/// `ParagraphBlock` so multi-line `> foo\n> bar` blockquotes render under one
+/// continuous bar instead of stacking separate bars per line.
 pub struct RenderableBlockquote {
     viewport_item: ViewportItem,
     placeholder: BlockPlaceholder,
@@ -37,13 +39,13 @@ impl RenderableBlock for RenderableBlockquote {
     }
 
     fn layout(&mut self, _model: &RenderState, _ctx: &mut warpui::LayoutContext, _app: &AppContext) {
-        // No additional decoration to lay out — the inner paragraph is laid
-        // out by the rich-text pipeline via the parent element.
+        // No additional decoration to lay out — paragraphs are laid out by the
+        // rich-text pipeline via the parent element.
     }
 
     fn paint(&mut self, model: &RenderState, ctx: &mut RenderContext, _app: &AppContext) {
         let content = model.content();
-        let blockquote = extract_block!(self.viewport_item, content, (block, BlockItem::Blockquote{paragraph}) => block.blockquote(paragraph));
+        let blockquote = extract_block!(self.viewport_item, content, (block, BlockItem::Blockquote{paragraph_block}) => block.blockquote(paragraph_block));
 
         let styles = model.styles();
         let text_styling = &styles.base_text;
@@ -68,7 +70,9 @@ impl RenderableBlock for RenderableBlockquote {
 
         let content_origin = blockquote.content_origin();
         if !self.placeholder.paint(content_origin, model, ctx) {
-            ctx.draw_paragraph(&blockquote, text_styling, model);
+            for paragraph in blockquote.paragraphs() {
+                ctx.draw_paragraph(&paragraph, text_styling, model);
+            }
         }
     }
 }

@@ -159,9 +159,9 @@ impl<'a> Positioned<'a, BlockItem> {
             BlockItem::OrderedList { paragraph, .. } => self
                 .ordered_list(paragraph)
                 .coordinate_to_location(self.unpad_x(x), y),
-            BlockItem::Blockquote { paragraph } => self
-                .blockquote(paragraph)
-                .coordinate_to_location(self.unpad_x(x), y),
+            BlockItem::Blockquote { paragraph_block } => {
+                self.location_in_paragraph_block(x, y, self.blockquote(paragraph_block))
+            }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => {
