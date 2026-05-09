@@ -28,6 +28,10 @@ pub struct Appearance {
     // isn't actually a changeable setting right now.
     ui_font_family: FamilyId,
     ai_font_family: FamilyId,
+    /// Body font for notebook/markdown rendering. Defaults to `ui_font_family`
+    /// when the user hasn't explicitly set `notebook_font_name`, so picking a
+    /// UI font also affects notebooks unless overridden separately.
+    notebook_font_family: FamilyId,
     /// A font that is used for password fields.
     password_font_family: FamilyId,
 }
@@ -78,6 +82,7 @@ impl Appearance {
         ui_font_family: FamilyId,
         line_height_ratio: f32,
         ai_font_family: FamilyId,
+        notebook_font_family: FamilyId,
         password_font_family: FamilyId,
     ) -> Self {
         Self {
@@ -95,6 +100,7 @@ impl Appearance {
                 line_height_ratio,
             ),
             ai_font_family,
+            notebook_font_family,
             password_font_family,
         }
     }
@@ -133,6 +139,7 @@ impl Appearance {
             ),
             ui_font_family,
             ai_font_family: FamilyId(0),
+            notebook_font_family: ui_font_family,
             password_font_family: FamilyId(0),
         }
     }
@@ -206,6 +213,26 @@ impl Appearance {
 
         // We fire the same event as monospace font family change - performance is likely not going to be an issue.
         ctx.emit(AppearanceEvent::MonospaceFontFamilyChanged {
+            previous_family_id,
+            current_family_id: new_family,
+        });
+    }
+
+    pub fn set_notebook_font_family(
+        &mut self,
+        new_family: FamilyId,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let previous_family_id = self.notebook_font_family;
+        self.notebook_font_family = new_family;
+
+        // Request a redraw of all windows.
+        ctx.invalidate_all_views();
+
+        // Reuse the UiFontFamilyChanged event — notebook rendering is part of
+        // the same redraw cycle and there are no listeners that care about
+        // notebook-only font transitions today.
+        ctx.emit(AppearanceEvent::UiFontFamilyChanged {
             previous_family_id,
             current_family_id: new_family,
         });
@@ -300,6 +327,10 @@ impl Appearance {
 
     pub fn ui_font_family(&self) -> FamilyId {
         self.ui_font_family
+    }
+
+    pub fn notebook_font_family(&self) -> FamilyId {
+        self.notebook_font_family
     }
 
     pub fn ui_font_size(&self) -> f32 {

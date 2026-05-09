@@ -36,7 +36,20 @@ define_settings_group!(FontSettings,
             private: false,
             storage_key: "UIFontName",
             toml_path: "appearance.text.ui_font_name",
-            description: "The proportional font used for notebooks and UI body text. Empty value falls back to the platform default.",
+            description: "The proportional font used for UI chrome (settings labels, panels, tab titles). Empty value falls back to the platform default.",
+        },
+        notebook_font_name: NotebookFontName {
+            type: String,
+            // Empty default = inherit the resolved `ui_font_family`, so picking
+            // a UI font also affects notebook body text unless the user
+            // explicitly sets a separate notebook font here.
+            default: String::new(),
+            supported_platforms: SupportedPlatforms::ALL,
+            sync_to_cloud: SyncToCloud::Never,
+            private: false,
+            storage_key: "NotebookFontName",
+            toml_path: "appearance.text.notebook_font_name",
+            description: "The proportional font used for notebook/markdown body text. Empty value inherits the UI font, so set this to a serif (e.g. Charter, Iowan Old Style) for a tasteful prose-reading experience while keeping the UI sans-serif.",
         },
         monospace_font_size: MonospaceFontSize {
             type: f32,

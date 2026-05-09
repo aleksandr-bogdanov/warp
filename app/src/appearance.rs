@@ -123,8 +123,37 @@ impl AppearanceManager {
                         get_or_load_font_family(&font_name, ctx)
                     };
                     if let Some(new_family) = new_family {
+                        // If notebook_font_name is also empty, the notebook
+                        // inherits ui_font, so update both — otherwise the
+                        // notebook font will go stale until next app restart.
+                        let notebook_setting_empty = FontSettings::as_ref(ctx)
+                            .notebook_font_name
+                            .value()
+                            .is_empty();
                         Appearance::handle(ctx).update(ctx, |appearance, ctx| {
-                            appearance.set_ui_font_family(new_family, ctx)
+                            appearance.set_ui_font_family(new_family, ctx);
+                            if notebook_setting_empty {
+                                appearance.set_notebook_font_family(new_family, ctx);
+                            }
+                        });
+                    }
+                }
+                FontSettingsChangedEvent::NotebookFontName { .. } => {
+                    let font_name = FontSettings::as_ref(ctx).notebook_font_name.value().clone();
+                    let new_family = if font_name.is_empty() {
+                        // User cleared the override — fall back to the
+                        // currently-resolved ui_font_family.
+                        Some(Appearance::as_ref(ctx).ui_font_family())
+                    } else {
+                        get_or_load_font_family(&font_name, ctx).or_else(|| {
+                            // Failed to load the requested font; fall back to
+                            // ui_font instead of leaving the notebook stale.
+                            Some(Appearance::as_ref(ctx).ui_font_family())
+                        })
+                    };
+                    if let Some(new_family) = new_family {
+                        Appearance::handle(ctx).update(ctx, |appearance, ctx| {
+                            appearance.set_notebook_font_family(new_family, ctx)
                         });
                     }
                 }
@@ -444,6 +473,16 @@ fn build_appearance(ctx: &mut AppContext) -> Appearance {
             load_default_ui_font_family(ctx).expect("unable to load default ui font family")
         });
 
+    // Notebook font inherits the resolved ui_font_family unless the user has
+    // explicitly set notebook_font_name. Lets users pick a serif (Charter, etc)
+    // for prose without serif-ifying the UI.
+    let notebook_font_name = FontSettings::as_ref(ctx).notebook_font_name.value().clone();
+    let notebook_font_family = if notebook_font_name.is_empty() {
+        ui_font_family
+    } else {
+        get_or_load_font_family(&notebook_font_name, ctx).unwrap_or(ui_font_family)
+    };
+
     let am_font_family_from_settings = get_or_load_font_family(&am_font_name, ctx);
 
     let password_font_family =
@@ -468,6 +507,7 @@ fn build_appearance(ctx: &mut AppContext) -> Appearance {
         ui_font_family,
         line_height_ratio,
         am_font_family_from_settings.unwrap_or(default_monospace_font_family),
+        notebook_font_family,
         password_font_family,
     )
 }

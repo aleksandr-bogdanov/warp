@@ -212,7 +212,10 @@ pub fn rich_text_styles(appearance: &Appearance, font_settings: &FontSettings) -
             font_size,
             font_weight: Default::default(),
             line_height_ratio: NOTEBOOK_LINE_HEIGHT_RATIO,
-            font_family: appearance.ui_font_family(),
+            // Notebook body uses notebook_font_family (which inherits ui_font
+            // when notebook_font_name is unset). Lets users pick a serif for
+            // prose without serif-ifying the rest of the UI.
+            font_family: appearance.notebook_font_family(),
             text_color: theme.main_text_color(theme.background()).into_solid(),
             baseline_ratio: NOTEBOOK_BASELINE_RATIO,
             fixed_width_tab_size: None,
