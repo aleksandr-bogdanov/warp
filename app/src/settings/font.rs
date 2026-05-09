@@ -24,6 +24,20 @@ define_settings_group!(FontSettings,
             toml_path: "appearance.text.font_name",
             description: "The monospace font used in the terminal.",
         },
+        ui_font_name: UIFontName {
+            type: String,
+            // Empty default = use the platform-appropriate default loaded by
+            // load_default_ui_font_family (e.g. system Helvetica on macOS,
+            // Segoe UI on Windows, bundled Roboto otherwise). Setting a value
+            // here overrides the platform default with the chosen system font.
+            default: String::new(),
+            supported_platforms: SupportedPlatforms::ALL,
+            sync_to_cloud: SyncToCloud::Never,
+            private: false,
+            storage_key: "UIFontName",
+            toml_path: "appearance.text.ui_font_name",
+            description: "The proportional font used for notebooks and UI body text. Empty value falls back to the platform default.",
+        },
         monospace_font_size: MonospaceFontSize {
             type: f32,
             default: DEFAULT_MONOSPACE_FONT_SIZE,

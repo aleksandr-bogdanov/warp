@@ -113,6 +113,21 @@ impl AppearanceManager {
                         });
                     }
                 }
+                FontSettingsChangedEvent::UIFontName { .. } => {
+                    let font_name = FontSettings::as_ref(ctx).ui_font_name.value().clone();
+                    let new_family = if font_name.is_empty() {
+                        // User cleared the override — revert to the platform
+                        // default loader so we pick up Helvetica/Segoe UI/etc.
+                        load_default_ui_font_family(ctx).ok()
+                    } else {
+                        get_or_load_font_family(&font_name, ctx)
+                    };
+                    if let Some(new_family) = new_family {
+                        Appearance::handle(ctx).update(ctx, |appearance, ctx| {
+                            appearance.set_ui_font_family(new_family, ctx)
+                        });
+                    }
+                }
                 FontSettingsChangedEvent::MatchAIFontToTerminalFont { .. } => {
                     let settings = FontSettings::as_ref(ctx);
                     let match_ai_font_to_terminal_font =
@@ -418,8 +433,16 @@ fn build_appearance(ctx: &mut AppContext) -> Appearance {
 
     let monospace_font_family_from_settings = get_or_load_font_family(&monospace_font_name, ctx);
 
-    let ui_font_family =
-        load_default_ui_font_family(ctx).expect("unable to load default ui font family");
+    let ui_font_name = FontSettings::as_ref(ctx).ui_font_name.value().clone();
+    let ui_font_family_from_settings = if ui_font_name.is_empty() {
+        None
+    } else {
+        get_or_load_font_family(&ui_font_name, ctx)
+    };
+    let ui_font_family = ui_font_family_from_settings
+        .unwrap_or_else(|| {
+            load_default_ui_font_family(ctx).expect("unable to load default ui font family")
+        });
 
     let am_font_family_from_settings = get_or_load_font_family(&am_font_name, ctx);
 

@@ -31,7 +31,7 @@ use crate::settings::{
     respect_system_theme, AIFontName, AppEditorSettings, CursorBlink, CursorBlinkEnabled,
     EnforceMinimumContrast, FocusPaneOnHover, FontSettings, FontSettingsChangedEvent, InputBoxType,
     InputModeSettings, InputModeState, MonospaceFontName, PaneSettings, ShouldDimInactivePanes,
-    ThemeSettings, UseSystemTheme, DEFAULT_MONOSPACE_FONT_NAME,
+    ThemeSettings, UIFontName, UseSystemTheme, DEFAULT_MONOSPACE_FONT_NAME,
 };
 use crate::settings::{CursorDisplayType, GPUSettings, InputSettings, InputSettingsChangedEvent};
 use crate::terminal::block_list_viewport::InputMode;
@@ -134,6 +134,14 @@ fn default_font_label(is_ai_font: bool) -> String {
     } else {
         format!("{} (default)", MonospaceFontName::default_value())
     }
+}
+
+/// Label for the "use platform default" item in the UI font dropdown.
+/// Unlike monospace (Hack) or AI (Hack), the UI font default is platform-derived
+/// (Helvetica on macOS, Segoe UI on Windows, bundled Roboto otherwise) and lives
+/// behind an empty `UIFontName` setting value.
+fn default_ui_font_label() -> &'static str {
+    "System default"
 }
 
 pub fn init_actions_from_parent_view<T: Action + Clone>(
@@ -436,6 +444,7 @@ pub enum AppearancePageAction {
     BlurSliderDragged(f32),
     SetFontFamily(String),
     SetAIFontFamily(String),
+    SetUIFontFamily(String),
     SetThinStrokes(ThinStrokes),
     SetInputMode {
         new_mode: InputMode,
@@ -497,6 +506,7 @@ pub struct AppearanceSettingsPageView {
     opacity_state: SliderStateHandle,
     blur_state: SliderStateHandle,
     font_family_dropdown: ViewHandle<FilterableDropdown<AppearancePageAction>>,
+    ui_font_family_dropdown: ViewHandle<FilterableDropdown<AppearancePageAction>>,
     font_weight_dropdown: ViewHandle<Dropdown<AppearancePageAction>>,
     #[allow(dead_code)]
     thin_strokes_dropdown: ViewHandle<Dropdown<AppearancePageAction>>,
@@ -561,6 +571,7 @@ impl TypedActionView for AppearanceSettingsPageView {
                         .set_value(false, ctx));
                 });
             }
+            SetUIFontFamily(name) => self.set_ui_font_family(name, ctx),
             SetThinStrokes(value) => self.set_thin_strokes(value, ctx),
             SetEnforceMinimumContrast(value) => {
                 FontSettings::handle(ctx).update(ctx, |font_settings, ctx| {
@@ -1014,6 +1025,18 @@ impl AppearanceSettingsPageView {
             dropdown
         });
 
+        let ui_font_family_dropdown = ctx.add_typed_action_view(|ctx| {
+            let mut dropdown = FilterableDropdown::new(ctx);
+            dropdown.set_top_bar_max_width(FONT_FAMILY_DROPDOWN_WIDTH);
+            dropdown.set_menu_width(FONT_FAMILY_DROPDOWN_WIDTH, ctx);
+
+            // Seed with the "system default" sentinel so an empty `ui_font_name`
+            // setting reads as a real selection.
+            dropdown.add_items(vec![Self::default_ui_font_item(ctx)], ctx);
+            dropdown.set_selected_by_index(0, ctx);
+            dropdown
+        });
+
         let font_weight_dropdown = ctx.add_typed_action_view(|ctx| {
             let mut dropdown = Dropdown::new(ctx);
             dropdown.set_top_bar_max_width(FONT_WEIGHT_DROPDOWN_WIDTH);
@@ -1205,6 +1228,7 @@ impl AppearanceSettingsPageView {
             window_id: ctx.window_id(),
             local_only_icon_tooltip_states: Default::default(),
             ai_font_family_dropdown,
+            ui_font_family_dropdown,
             notebook_font_size_editor,
             font_size_editor,
             line_height_editor,
@@ -1334,6 +1358,7 @@ impl AppearanceSettingsPageView {
         let mut text_settings_widgets: Vec<Box<dyn SettingsWidget<View = Self>>> = vec![
             Box::new(TerminalFontWidget::default()),
             Box::new(AIFontWidget::default()),
+            Box::new(UIFontWidget::default()),
             Box::new(NotebookFontSizeWidget::default()),
         ];
         if font_settings
@@ -1514,6 +1539,21 @@ impl AppearanceSettingsPageView {
         }
 
         initial_dropdown_item
+    }
+
+    /// Mirror of [`default_font_item`] for the UI font dropdown. Selecting this
+    /// item clears the user's UI font override (sets `ui_font_name` to empty),
+    /// causing the appearance loader to fall back to the platform default.
+    fn default_ui_font_item<V>(
+        _ctx: &mut ViewContext<V>,
+    ) -> DropdownItem<AppearancePageAction>
+    where
+        V: View,
+    {
+        DropdownItem::new(
+            default_ui_font_label(),
+            AppearancePageAction::SetUIFontFamily(String::new()),
+        )
     }
 
     fn input_mode_dropdown_item_label(val: InputMode) -> &'static str {
@@ -1876,6 +1916,8 @@ impl AppearanceSettingsPageView {
     fn update_font_dropdown(&mut self, ctx: &mut ViewContext<Self>) {
         let monospace_font_family = Appearance::as_ref(ctx).monospace_font_family();
         let ai_font_family = Appearance::as_ref(ctx).ai_font_family();
+        let ui_font_family = Appearance::as_ref(ctx).ui_font_family();
+        let ui_font_name_setting = FontSettings::as_ref(ctx).ui_font_name.value().clone();
 
         self.font_family_dropdown.update(ctx, |dropdown, ctx| {
             // Get the family name of the current monospace font.
@@ -2003,6 +2045,59 @@ impl AppearanceSettingsPageView {
             }
         });
 
+        self.ui_font_family_dropdown.update(ctx, |dropdown, ctx| {
+            // Mirror of the AI/monospace dropdown population, scoped to UI body
+            // text. Empty `ui_font_name` setting → show "System default" as the
+            // selected sentinel; anything else → show the resolved family name.
+            let resolved_font_name = ctx.font_cache().load_family_name_from_id(ui_font_family);
+
+            if let Some(font_name) = &resolved_font_name {
+                self.available_families
+                    .entry(font_name.clone())
+                    .and_modify(|entry| entry.0 = Some(ui_font_family))
+                    .or_insert((Some(ui_font_family), FontType::Any));
+            }
+
+            let mut items = self
+                .available_families
+                .iter()
+                .filter_map(|(name, (family, _font_type))| {
+                    let name_move = name.clone();
+                    let mut item = DropdownItem::new(
+                        name,
+                        AppearancePageAction::SetUIFontFamily(name_move),
+                    );
+
+                    // If we're on a non-Linux platform, render the dropdown item in the
+                    // actual font.  We currently don't do this on Linux because
+                    // pre-loading all of the fonts is too expensive.
+                    if cfg!(not(any(target_os = "linux", target_os = "freebsd"))) {
+                        if let Some(family_id) = family {
+                            item = item.with_font_override(*family_id)
+                        }
+                    }
+
+                    Some(item)
+                })
+                .collect::<Vec<_>>();
+
+            // Sort the font names by alphabetical order.
+            items.sort_by(|a, b| a.display_text.cmp(&b.display_text));
+            // Prepend the "System default" sentinel item.
+            items.insert(0, Self::default_ui_font_item(ctx));
+            dropdown.set_items(items, ctx);
+
+            // Empty setting value → user is on the platform default. Otherwise
+            // select the resolved family name (which may differ from the raw
+            // setting value if the requested font failed to load and we fell
+            // back to the platform default).
+            if ui_font_name_setting.is_empty() {
+                dropdown.set_selected_by_name(default_ui_font_label(), ctx);
+            } else if let Some(font_name) = &resolved_font_name {
+                dropdown.set_selected_by_name(font_name, ctx);
+            }
+        });
+
         ctx.notify();
     }
 
@@ -2067,6 +2162,12 @@ impl AppearanceSettingsPageView {
     pub fn set_ai_font_family(&mut self, name: &str, ctx: &mut ViewContext<Self>) {
         FontSettings::handle(ctx).update(ctx, |font_settings, ctx| {
             report_if_error!(font_settings.ai_font_name.set_value(name.to_string(), ctx))
+        });
+    }
+
+    pub fn set_ui_font_family(&mut self, name: &str, ctx: &mut ViewContext<Self>) {
+        FontSettings::handle(ctx).update(ctx, |font_settings, ctx| {
+            report_if_error!(font_settings.ui_font_name.set_value(name.to_string(), ctx))
         });
     }
 
@@ -3793,6 +3894,50 @@ impl SettingsWidget for AIFontWidget {
         );
 
         ai_font_row.finish()
+    }
+}
+
+#[derive(Default)]
+struct UIFontWidget;
+
+impl SettingsWidget for UIFontWidget {
+    type View = AppearanceSettingsPageView;
+
+    fn search_terms(&self) -> &str {
+        "text ui font family notebook proportional helvetica"
+    }
+
+    fn render(
+        &self,
+        view: &Self::View,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let mut ui_font_row = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);
+        let mut ui_font = Flex::column();
+        ui_font.add_child(render_body_item_label::<AppearancePageAction>(
+            "UI font".to_string(),
+            None,
+            None,
+            LocalOnlyIconState::for_setting(
+                UIFontName::storage_key(),
+                UIFontName::sync_to_cloud(),
+                &mut view.local_only_icon_tooltip_states.borrow_mut(),
+                app,
+            ),
+            ToggleState::Enabled,
+            appearance,
+        ));
+        ui_font.add_child(
+            Container::new(ChildView::new(&view.ui_font_family_dropdown).finish())
+                .with_margin_bottom(10.)
+                .finish(),
+        );
+
+        ui_font_row
+            .add_child(Shrinkable::new(1., Align::new(ui_font.finish()).left().finish()).finish());
+
+        ui_font_row.finish()
     }
 }
 
