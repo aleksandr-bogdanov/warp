@@ -170,8 +170,8 @@ pub(crate) fn markdown_table_appearance(appearance: &Appearance) -> MarkdownTabl
         header_text_color: internal_colors::text_main(theme, theme.background()),
         scrollbar_nonactive_thumb_color: theme.nonactive_ui_detail().into_solid(),
         scrollbar_active_thumb_color: theme.active_ui_detail().into_solid(),
-        cell_padding: 12.,
-        cell_padding_y: 12.,
+        cell_padding: 16.,
+        cell_padding_y: 10.,
         outer_border: false,
         column_dividers: false,
         row_dividers: true,
@@ -206,7 +206,6 @@ pub(crate) fn markdown_table_style(
 /// Build [`RichTextStyles`] based on the current [`Appearance`].
 pub fn rich_text_styles(appearance: &Appearance, font_settings: &FontSettings) -> RichTextStyles {
     let theme = appearance.theme();
-    let inline_font_color: ColorU = theme.terminal_colors().normal.red.into();
     let font_size = derived_notebook_font_size(font_settings);
     RichTextStyles {
         base_text: ParagraphStyles {
@@ -220,18 +219,22 @@ pub fn rich_text_styles(appearance: &Appearance, font_settings: &FontSettings) -
         },
         code_text: ParagraphStyles {
             font_family: appearance.monospace_font_family(),
-            font_size,
+            // Slightly smaller than body — monospace glyphs render visually
+            // larger than proportional fonts at the same size.
+            font_size: font_size * 0.93,
             font_weight: Default::default(),
             line_height_ratio: NOTEBOOK_LINE_HEIGHT_RATIO,
             text_color: theme.main_text_color(theme.background()).into_solid(),
             baseline_ratio: NOTEBOOK_BASELINE_RATIO,
             fixed_width_tab_size: Some(4),
         },
-        code_background: theme.background().into(),
-        // Theme-derived neutral surface — themes can override per their palette.
-        blockquote_background: theme.surface_3().into(),
-        // Theme-derived subtle border — visually distinct without overpowering.
-        blockquote_bar_color: theme.outline().into(),
+        // GitHub-light palette code block bg — gives syntax highlighting
+        // enough contrast room while keeping a tasteful tint.
+        code_background: ColorU::from_u32(0xF6F8FAFF).into(),
+        // Same bg as code blocks for consistent neutral block-level fill.
+        blockquote_background: ColorU::from_u32(0xF6F8FAFF).into(),
+        // Accent bar — muted blue-gray, picks up the link/accent direction.
+        blockquote_bar_color: ColorU::from_u32(0xC6CCD3FF).into(),
         embedding_background: theme.surface_2().into(),
         embedding_text: ParagraphStyles {
             font_size,
@@ -254,9 +257,11 @@ pub fn rich_text_styles(appearance: &Appearance, font_settings: &FontSettings) -
             .into(),
         inline_code_style: InlineCodeStyle {
             font_family: appearance.monospace_font_family(),
-            background: theme.surface_3().into(),
-            font_color: inline_font_color
-                .on_background(theme.surface_3().into(), MinimumAllowedContrast::Text),
+            // GitHub-light bg — matches code block bg for visual consistency.
+            background: ColorU::from_u32(0xF6F8FAFF).into(),
+            font_color: theme
+                .main_text_color(ColorU::from_u32(0xF6F8FAFF).into())
+                .into_solid(),
         },
         check_box_style: CheckBoxStyle {
             border_color: theme.foreground().into(),

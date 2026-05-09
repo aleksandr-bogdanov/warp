@@ -107,7 +107,10 @@ const TABLE_SCROLL_REVEAL_MARGIN: Pixels = Pixels::new(8.);
 pub const EMBEDDED_ITEM_FIRST_LINE_HEIGHT: f32 = 24.;
 
 pub const TEXT_SPACING: BlockSpacing = BlockSpacing {
-    margin: Margin::uniform(4.).with_right(16.),
+    margin: Margin::uniform(4.)
+        .with_top(6.5)
+        .with_bottom(6.5)
+        .with_right(16.),
     padding: Padding::uniform(0.),
 };
 
@@ -139,21 +142,32 @@ pub const BROKEN_LINK_SPACING: BlockSpacing = BlockSpacing {
 
 pub const HEADER_SPACING: BlockSpacing = BlockSpacing {
     margin: Margin::uniform(4.)
-        .with_top(12.)
-        .with_bottom(12.)
+        .with_top(24.)
+        .with_bottom(2.)
         .with_right(16.),
     padding: Padding::uniform(0.),
 };
 
-/// H3-specific spacing. Defaults to identical values as `HEADER_SPACING` so the
-/// per-level dispatch is a no-op for upstream defaults; themes / typography
-/// templates can override to differentiate H3 from H1/H2.
-pub const SMALL_HEADER_SPACING: BlockSpacing = HEADER_SPACING;
+/// Tighter top-margin for H3 — visually smaller than H1/H2 so the pre-gap
+/// is reduced. Matches IDEA's perceptual rhythm at 14px body / 1.3em H3.
+pub const SMALL_HEADER_SPACING: BlockSpacing = BlockSpacing {
+    margin: Margin::uniform(4.)
+        .with_top(12.)
+        .with_bottom(4.)
+        .with_right(16.),
+    padding: Padding::uniform(0.),
+};
 
-/// H4-H6 spacing. Defaults to identical values as `HEADER_SPACING` so the
-/// per-level dispatch is a no-op for upstream defaults; themes / typography
-/// templates can override to differentiate body-sized headers.
-pub const TINY_HEADER_SPACING: BlockSpacing = HEADER_SPACING;
+/// Symmetric, near-body pre/post gaps for H4-H6. These are body-sized headers
+/// where IDEA renders an inline emphasis rather than a full block break, so
+/// pre-gap should match post-gap (both ≈ TEXT_SPACING).
+pub const TINY_HEADER_SPACING: BlockSpacing = BlockSpacing {
+    margin: Margin::uniform(4.)
+        .with_top(4.)
+        .with_bottom(4.)
+        .with_right(16.),
+    padding: Padding::uniform(0.),
+};
 
 /// Spacing for blockquote blocks (lines that started with `>` in markdown).
 /// IDEA-style: block (bg + bar) extends to the body left margin, content is
@@ -174,7 +188,10 @@ pub const BLOCKQUOTE_SPACING: BlockSpacing = BlockSpacing {
 pub const UNORDERED_LIST_MARGIN: Margin = Margin::uniform(4.).with_right(16.);
 pub const UNIT_UNORDERED_LIST_PADDING: f32 = 20.;
 
-pub const ORDERED_LIST_MARGIN: Margin = Margin::uniform(4.).with_right(16.);
+/// Ordered lists get a wider left margin to align the visible "1." marker
+/// with the bullet position of unordered lists (compensates for the number
+/// taking more horizontal space than a bullet).
+pub const ORDERED_LIST_MARGIN: Margin = Margin::uniform(4.).with_left(12.).with_right(16.);
 pub const UNIT_ORDERED_LIST_PADDING: f32 = 20.;
 
 pub const TASK_LIST_MARGIN: Margin = Margin::uniform(4.).with_right(16.);

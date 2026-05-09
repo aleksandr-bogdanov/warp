@@ -87,13 +87,13 @@ pub const DEFAULT_LINE_HEIGHT_RATIO: f32 = 1.4;
 const FRAME_SPACER_HEIGHT: f32 = 4.;
 const LINE_BREAK_HEIGHT: f32 = 13.;
 
-const FULL_BULLET: &str = "•";
+const FULL_BULLET: &str = "·";
 const EMPTY_BULLET: &str = "◦";
 const SQUARE_BULLET: &str = "▪";
 
 // Background color for the code block.
 const CODE_BLOCK_BACKGROUND: u32 = 0x00000055;
-const DEFAULT_HYPERLINK_COLOR: u32 = 0x7aa6daff;
+const DEFAULT_HYPERLINK_COLOR: u32 = 0x163CB3FF;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperlinkUrl {

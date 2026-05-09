@@ -18,7 +18,9 @@ use warpui::{color::ColorU, text_layout::TextFrame};
 
 use super::model::{BlockSpacing, ParagraphStyles, RenderState, RichTextStyles};
 
-const HYPERLINK_UNDERLINE_COLOR: u32 = 0x7aa6daff;
+// IDEA-style hyperlink color — dark rich blue with a hint of purple, matching
+// IDEA's default-browser link color in JCEF preview. No underline.
+const HYPERLINK_UNDERLINE_COLOR: u32 = 0x163CB3FF;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct InlineTextLayoutInput {
@@ -236,10 +238,8 @@ pub(crate) fn line_height(line: &Line) -> f32 {
 
 pub(crate) fn add_link_to_style_and_font(mut style: StyleAndFont) -> StyleAndFont {
     let hyperlink_color = ColorU::from_u32(HYPERLINK_UNDERLINE_COLOR);
-    style.style = style
-        .style
-        .with_underline_color(hyperlink_color)
-        .with_foreground_color(hyperlink_color);
+    // IDEA-style: foreground color only, no static underline.
+    style.style = style.style.with_foreground_color(hyperlink_color);
     style
 }
 
