@@ -1582,6 +1582,7 @@ impl From<&FormattedTextLine> for LineType {
             FormattedTextLine::UnorderedList(_) => LineType::UnorderedList,
             FormattedTextLine::Heading(_)
             | FormattedTextLine::Line(_)
+            | FormattedTextLine::Blockquote(_)
             | FormattedTextLine::TaskList(_)
             | FormattedTextLine::Table(_) => LineType::FormattedLine,
             FormattedTextLine::CodeBlock(_) => LineType::CodeBlock,
@@ -1627,7 +1628,7 @@ impl Element for FormattedTextElement {
                     0,
                     LineType::FormattedLine,
                 ),
-                FormattedTextLine::Line(texts) => {
+                FormattedTextLine::Line(texts) | FormattedTextLine::Blockquote(texts) => {
                     (self.font_size, texts, 0, LineType::FormattedLine)
                 }
                 // TODO: Update when we support task lists.
@@ -1709,13 +1710,7 @@ impl Element for FormattedTextElement {
 
             // If there is a prefix (e.g. bullet points, numbers, etc), accounts for the style of it which will be default.
             if !text.is_empty() {
-                let style = match line {
-                    // Round bullets are a bit small comparing to the square bullet, so we bold them to increase their size.
-                    FormattedTextLine::UnorderedList(_) if indent == 1 || indent == 2 => {
-                        Properties::default().weight(Weight::Bold)
-                    }
-                    _ => Properties::default(),
-                };
+                let style = Properties::default();
                 styles.push((
                     0..glyph_offset,
                     StyleAndFont::new(self.family_id, style, TextStyle::new()),

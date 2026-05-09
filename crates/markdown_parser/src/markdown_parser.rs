@@ -181,6 +181,7 @@ fn parse_markdown_internal<'a, E: ContextError<&'a str> + ParseError<&'a str>>(
                 }
                 map(parse_table, FormattedTextLine::Table)(i)
             },
+            parse_blockquote,
             parse_paragraph,
         )),
     );
@@ -228,6 +229,21 @@ fn parse_paragraph<'a, E: ContextError<&'a str> + ParseError<&'a str>>(
     context(
         "paragraph",
         map(parse_markdown_line, FormattedTextLine::Line),
+    )(markdown)
+}
+
+/// Parse a blockquote line. Strips the leading `>` and optional whitespace,
+/// then returns a `FormattedTextLine::Blockquote` so the renderer can apply
+/// blockquote-specific styling (left bar, indent).
+fn parse_blockquote<'a, E: ContextError<&'a str> + ParseError<&'a str>>(
+    markdown: &'a str,
+) -> IResult<&'a str, FormattedTextLine, E> {
+    context(
+        "blockquote",
+        map(
+            preceded(pair(tag(">"), space0), parse_markdown_line),
+            FormattedTextLine::Blockquote,
+        ),
     )(markdown)
 }
 

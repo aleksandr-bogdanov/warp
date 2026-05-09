@@ -521,6 +521,38 @@ impl EditDelta {
 
         let last_task = layout_tasks.len().saturating_sub(1);
 
+        // Pre-pass: compute each task's position within its list run (if any).
+        // This is what lets us give the first/last item in a list extra outer
+        // margin while keeping inter-item gaps tight — without it, all list
+        // items share one margin used for both purposes simultaneously.
+        let list_positions: Vec<ListPosition> = (0..layout_tasks.len())
+            .map(|idx| {
+                let current_kind = match &layout_tasks[idx].0 {
+                    LayoutTask::Text(text_block) => list_kind_discriminator(&text_block.style),
+                    _ => None,
+                };
+                let Some(kind) = current_kind else {
+                    return ListPosition::NotInList;
+                };
+                let prev_same = idx > 0
+                    && matches!(
+                        &layout_tasks[idx - 1].0,
+                        LayoutTask::Text(prev) if list_kind_discriminator(&prev.style) == Some(kind)
+                    );
+                let next_same = idx + 1 < layout_tasks.len()
+                    && matches!(
+                        &layout_tasks[idx + 1].0,
+                        LayoutTask::Text(next) if list_kind_discriminator(&next.style) == Some(kind)
+                    );
+                match (prev_same, next_same) {
+                    (false, false) => ListPosition::Solo,
+                    (false, true) => ListPosition::First,
+                    (true, false) => ListPosition::Last,
+                    (true, true) => ListPosition::Middle,
+                }
+            })
+            .collect();
+
         // Then, run each task in parallel, collecting (a) the laid out BlockItems and (b) whether
         // or not the last item ends with a newline.
         let (block_items, has_trailing_newline): (Vec<_>, Last<_>) = layout_tasks
@@ -534,8 +566,9 @@ impl EditDelta {
                 } else {
                     BlockLocation::Middle
                 };
+                let list_position = list_positions[idx];
 
-                match task.run(layout, location, is_hidden) {
+                match task.run(layout, location, is_hidden, list_position) {
                     Ok(result) => Some(result),
                     Err(e) => {
                         log::error!(
@@ -621,7 +654,7 @@ pub fn layout_temporary_blocks(
                 BlockLocation::Middle
             };
 
-            match task.run(layout, location, false) {
+            match task.run(layout, location, false, ListPosition::NotInList) {
                 Ok(result) => Some((line_count, result.0)),
                 Err(e) => {
                     log::error!("Failed to lay out temporary blocks: {e:?}");
@@ -632,6 +665,42 @@ pub fn layout_temporary_blocks(
         .collect();
 
     results.into_iter().into_group_map()
+}
+
+/// Where a block sits in a run of consecutive list items of the same kind.
+/// Used to apply outer margins only to the first and last items, so that
+/// inter-item spacing can stay tight while pre/post-list gaps breathe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ListPosition {
+    /// Block isn't a list item, or is unknown — apply no boundary adjustment.
+    NotInList,
+    /// First item in a list run; gets extra top margin.
+    First,
+    /// Middle item; no adjustment.
+    Middle,
+    /// Last item in a list run; gets extra bottom margin.
+    Last,
+    /// Only item in the list run (both first and last).
+    Solo,
+}
+
+/// Outer-edge margins added to the first/last item of a list run.
+/// These stack with TEXT_SPACING from neighbouring paragraphs to produce
+/// IDEA-like pre/post-list breathing without inflating inter-item gaps.
+const LIST_OUTER_MARGIN_TOP: f32 = 4.;
+const LIST_OUTER_MARGIN_BOTTOM: f32 = 6.;
+
+/// Returns a discriminator for "list kind + indent level" if the style is a list, else None.
+/// Two adjacent list items with the same discriminator belong to the same list run.
+fn list_kind_discriminator(
+    style: &BufferBlockStyle,
+) -> Option<(u8, warpui::elements::ListIndentLevel)> {
+    match style {
+        BufferBlockStyle::UnorderedList { indent_level } => Some((1, *indent_level)),
+        BufferBlockStyle::OrderedList { indent_level, .. } => Some((2, *indent_level)),
+        BufferBlockStyle::TaskList { indent_level, .. } => Some((3, *indent_level)),
+        _ => None,
+    }
 }
 
 /// A unit of work for parallel layout of an edit.
@@ -770,6 +839,7 @@ impl LayoutTask {
         layout: &TextLayout,
         location: BlockLocation,
         is_hidden: bool,
+        list_position: ListPosition,
     ) -> Result<(BlockItem, bool)> {
         match self {
             Self::Embed(item) => Ok((BlockItem::Embedded(item.into()), true)),
@@ -791,7 +861,9 @@ impl LayoutTask {
                     true, // Images are always followed by a trailing newline in the buffer
                 ))
             }
-            Self::Text(text_block) => layout_text_block(text_block, layout, location, is_hidden),
+            Self::Text(text_block) => {
+                layout_text_block(text_block, layout, location, is_hidden, list_position)
+            }
             Self::MermaidDiagram {
                 text_block,
                 asset_source,
@@ -853,6 +925,7 @@ fn layout_text_block(
     layout: &TextLayout,
     location: BlockLocation,
     is_hidden: bool,
+    list_position: ListPosition,
 ) -> Result<(BlockItem, bool)> {
     if is_hidden {
         // If all text is hidden, return a BlockItem::Hidden without doing any layout
@@ -885,9 +958,21 @@ fn layout_text_block(
     let mut paragraphs = Vec::with_capacity(estimate_paragraph_count(&text_block));
 
     let rich_text_styles = layout.rich_text_styles();
-    let spacing = rich_text_styles
+    let mut spacing = rich_text_styles
         .block_spacings
         .from_block_style(&text_block.style);
+    // Apply list-boundary outer margins so first/last items in a list run get
+    // breathing space without inflating inter-item gaps. Middle items keep the
+    // tight inter-item spacing baked into LIST_MARGIN.
+    if list_kind_discriminator(&text_block.style).is_some() {
+        if matches!(list_position, ListPosition::First | ListPosition::Solo) {
+            spacing.margin = spacing.margin.with_top(LIST_OUTER_MARGIN_TOP);
+        }
+        if matches!(list_position, ListPosition::Last | ListPosition::Solo) {
+            spacing.margin = spacing.margin.with_bottom(LIST_OUTER_MARGIN_BOTTOM);
+        }
+    }
+    let spacing = spacing;
     let paragraph_styles = layout.paragraph_styles(&text_block.style);
 
     if rich_text_styles.highlight_urls {
@@ -1032,6 +1117,17 @@ fn layout_text_block(
                 .map(BlockItem::Paragraph)
                 .ok_or_else(|| anyhow!("Plain text item should have one paragraph"))
         }
+        BufferBlockStyle::Blockquote => {
+            debug_assert_eq!(
+                paragraphs.len(),
+                1,
+                "Blockquote paragraphs should only have one line."
+            );
+            paragraphs
+                .pop()
+                .map(|paragraph| BlockItem::Blockquote { paragraph })
+                .ok_or_else(|| anyhow!("Blockquote item should have one paragraph"))
+        }
         BufferBlockStyle::Table { .. } => paragraphs
             .pop()
             .map(BlockItem::Paragraph)
@@ -1155,10 +1251,10 @@ fn layout_table_block(
                 .sum::<f32>()
                 .into_pixels();
             let min_height = (cell.paragraph_style.line_height().as_f32()
-                + table_style.cell_padding * 2.0)
+                + table_style.cell_padding_y * 2.0)
                 .into_pixels();
             let cell_height =
-                (text_height + (table_style.cell_padding * 2.0).into_pixels()).max(min_height);
+                (text_height + (table_style.cell_padding_y * 2.0).into_pixels()).max(min_height);
             row_height = row_height.max(cell_height);
             row_frames.push(frame);
             row_layouts.push(cell_layout);

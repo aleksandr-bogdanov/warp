@@ -56,6 +56,7 @@ pub(crate) struct MarkdownTableAppearance {
     pub scrollbar_nonactive_thumb_color: ColorU,
     pub scrollbar_active_thumb_color: ColorU,
     pub cell_padding: f32,
+    pub cell_padding_y: f32,
     pub outer_border: bool,
     pub column_dividers: bool,
     pub row_dividers: bool,
@@ -170,6 +171,7 @@ pub(crate) fn markdown_table_appearance(appearance: &Appearance) -> MarkdownTabl
         scrollbar_nonactive_thumb_color: theme.nonactive_ui_detail().into_solid(),
         scrollbar_active_thumb_color: theme.active_ui_detail().into_solid(),
         cell_padding: 12.,
+        cell_padding_y: 12.,
         outer_border: false,
         column_dividers: false,
         row_dividers: true,
@@ -194,6 +196,7 @@ pub(crate) fn markdown_table_style(
         font_family,
         font_size,
         cell_padding: table_appearance.cell_padding,
+        cell_padding_y: table_appearance.cell_padding_y,
         outer_border: table_appearance.outer_border,
         column_dividers: table_appearance.column_dividers,
         row_dividers: table_appearance.row_dividers,
@@ -225,6 +228,10 @@ pub fn rich_text_styles(appearance: &Appearance, font_settings: &FontSettings) -
             fixed_width_tab_size: Some(4),
         },
         code_background: theme.background().into(),
+        // Theme-derived neutral surface — themes can override per their palette.
+        blockquote_background: theme.surface_3().into(),
+        // Theme-derived subtle border — visually distinct without overpowering.
+        blockquote_bar_color: theme.outline().into(),
         embedding_background: theme.surface_2().into(),
         embedding_text: ParagraphStyles {
             font_size,
@@ -318,6 +325,7 @@ impl<'a> From<&'a BufferBlockStyle> for BlockType {
                 CodeBlockType::Mermaid | CodeBlockType::Code { .. } => BlockType::Code,
             },
             BufferBlockStyle::PlainText => BlockType::Text,
+            BufferBlockStyle::Blockquote => BlockType::Text,
             BufferBlockStyle::Header { header_size } => BlockType::Header(*header_size),
             BufferBlockStyle::UnorderedList { .. } => BlockType::UnorderedList,
             BufferBlockStyle::OrderedList { .. } => BlockType::OrderedList,

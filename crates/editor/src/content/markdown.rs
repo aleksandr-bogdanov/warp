@@ -94,6 +94,9 @@ impl<'a> BufferMarkdownParser<'a> {
                             res.push_str(&"#".repeat(header_size.into()));
                             res.push(' ');
                         }
+                        BufferBlockStyle::Blockquote => {
+                            res.push_str("> ");
+                        }
                         BufferBlockStyle::UnorderedList { indent_level } => {
                             res.push_str("    ".repeat(indent_level.as_usize()).as_str());
                             res.push_str("* ")
@@ -154,6 +157,7 @@ impl<'a> BufferMarkdownParser<'a> {
                         }
                         BufferBlockStyle::Header { .. }
                         | BufferBlockStyle::PlainText
+                        | BufferBlockStyle::Blockquote
                         | BufferBlockStyle::UnorderedList { .. }
                         | BufferBlockStyle::OrderedList { .. }
                         | BufferBlockStyle::TaskList { .. } => (),
@@ -504,6 +508,19 @@ impl<'a> BufferToFormattedText<'a> {
                         BufferBlockStyle::PlainText => {
                             trailing_new_line = false;
                             FormattedTextLine::Line(
+                                text_block
+                                    .block
+                                    .into_iter()
+                                    .map(|run| {
+                                        trailing_new_line = run.run.ends_with('\n');
+                                        run.to_formatted_text_fragment()
+                                    })
+                                    .collect(),
+                            )
+                        }
+                        BufferBlockStyle::Blockquote => {
+                            trailing_new_line = false;
+                            FormattedTextLine::Blockquote(
                                 text_block
                                     .block
                                     .into_iter()
@@ -909,6 +926,7 @@ impl Serialize for ExportedBufferBlocks<'_> {
                             Some(format!("h{}", Into::<usize>::into(header_size)))
                         }
                         BufferBlockStyle::PlainText => Some("p".to_string()),
+                        BufferBlockStyle::Blockquote => Some("blockquote".to_string()),
                         BufferBlockStyle::Table { .. } => None,
                     };
                     let tag_name = name.map(|name| QualName::new(None, ns!(html), name.into()));
@@ -1127,6 +1145,7 @@ fn formatted_text_line_to_block_style(line: &FormattedTextLine) -> Option<Buffer
             number: list.number,
         }),
         FormattedTextLine::Line(_) => Some(BufferBlockStyle::PlainText),
+        FormattedTextLine::Blockquote(_) => Some(BufferBlockStyle::Blockquote),
         FormattedTextLine::LineBreak => None,
         FormattedTextLine::HorizontalRule => Some(BufferBlockStyle::PlainText),
         // TODO(kevin): handle embedded objects in buffer.

@@ -145,6 +145,32 @@ pub const HEADER_SPACING: BlockSpacing = BlockSpacing {
     padding: Padding::uniform(0.),
 };
 
+/// H3-specific spacing. Defaults to identical values as `HEADER_SPACING` so the
+/// per-level dispatch is a no-op for upstream defaults; themes / typography
+/// templates can override to differentiate H3 from H1/H2.
+pub const SMALL_HEADER_SPACING: BlockSpacing = HEADER_SPACING;
+
+/// H4-H6 spacing. Defaults to identical values as `HEADER_SPACING` so the
+/// per-level dispatch is a no-op for upstream defaults; themes / typography
+/// templates can override to differentiate body-sized headers.
+pub const TINY_HEADER_SPACING: BlockSpacing = HEADER_SPACING;
+
+/// Spacing for blockquote blocks (lines that started with `>` in markdown).
+/// IDEA-style: block (bg + bar) extends to the body left margin, content is
+/// indented inside via padding-left so the bar sits at the start of the line.
+/// Vertical padding gives breathing room so text feels centered in the block.
+/// Multi-line blockquotes inherit this — bg + bar span the full block height.
+pub const BLOCKQUOTE_SPACING: BlockSpacing = BlockSpacing {
+    margin: Margin::uniform(4.)
+        .with_top(6.5)
+        .with_bottom(6.5)
+        .with_right(16.),
+    padding: Padding::uniform(0.)
+        .with_left(14.)
+        .with_top(12.)
+        .with_bottom(8.),
+};
+
 pub const UNORDERED_LIST_MARGIN: Margin = Margin::uniform(4.).with_right(16.);
 pub const UNIT_UNORDERED_LIST_PADDING: f32 = 20.;
 
@@ -157,6 +183,9 @@ pub const UNIT_TASK_LIST_PADDING: f32 = 20.;
 pub const DEFAULT_BLOCK_SPACINGS: BlockSpacings = BlockSpacings {
     text: TEXT_SPACING,
     header: HEADER_SPACING,
+    small_header: SMALL_HEADER_SPACING,
+    tiny_header: TINY_HEADER_SPACING,
+    blockquote: BLOCKQUOTE_SPACING,
     code_block: COMMAND_SPACING,
     task_list: IndentableBlockSpacing {
         margin: TASK_LIST_MARGIN,
@@ -471,6 +500,10 @@ pub struct RichTextStyles {
     pub code_text: ParagraphStyles,
     /// The background fill to use for code blocks.
     pub code_background: Fill,
+    /// The background fill to use for blockquote blocks.
+    pub blockquote_background: Fill,
+    /// The fill used for the left accent bar of blockquote blocks.
+    pub blockquote_bar_color: Fill,
     /// The background fill to use for embeddings.
     pub embedding_background: Fill,
     /// The text styles to use for embeddings.
@@ -527,6 +560,12 @@ impl IndentableBlockSpacing {
 pub struct BlockSpacings {
     pub text: BlockSpacing,
     pub header: BlockSpacing,
+    /// Spacing for H3 — tighter pre-gap than H1/H2.
+    pub small_header: BlockSpacing,
+    /// Spacing for H4-H6 — symmetric near-body gap for body-sized headers.
+    pub tiny_header: BlockSpacing,
+    /// Spacing for blockquote blocks — extra left padding for indent.
+    pub blockquote: BlockSpacing,
     pub code_block: BlockSpacing,
     pub task_list: IndentableBlockSpacing,
     pub ordered_list: IndentableBlockSpacing,
@@ -542,7 +581,11 @@ impl Default for BlockSpacings {
 impl BlockSpacings {
     pub fn from_block_style(&self, block_type: &BufferBlockStyle) -> BlockSpacing {
         match block_type {
-            BufferBlockStyle::Header { .. } => self.header,
+            BufferBlockStyle::Header { header_size } => match header_size {
+                BlockHeaderSize::Header1 | BlockHeaderSize::Header2 => self.header,
+                BlockHeaderSize::Header3 => self.small_header,
+                _ => self.tiny_header,
+            },
             BufferBlockStyle::OrderedList { indent_level, .. } => {
                 self.ordered_list.to_spacing(*indent_level)
             }
@@ -553,6 +596,7 @@ impl BlockSpacings {
                 self.task_list.to_spacing(*indent_level)
             }
             BufferBlockStyle::PlainText | BufferBlockStyle::Table { .. } => self.text,
+            BufferBlockStyle::Blockquote => self.blockquote,
             BufferBlockStyle::CodeBlock { .. } => self.code_block,
         }
     }
@@ -607,6 +651,9 @@ pub struct TableStyle {
     pub font_family: FamilyId,
     pub font_size: f32,
     pub cell_padding: f32,
+    /// Vertical cell padding (top/bottom). Allows tables with looser horizontal
+    /// breathing but tighter row heights, matching IDEA's table rhythm.
+    pub cell_padding_y: f32,
     pub outer_border: bool,
     pub column_dividers: bool,
     pub row_dividers: bool,
@@ -630,6 +677,7 @@ impl TableStyle {
         self.font_family != new_styles.font_family
             || self.font_size != new_styles.font_size
             || self.cell_padding != new_styles.cell_padding
+            || self.cell_padding_y != new_styles.cell_padding_y
     }
 }
 
@@ -797,6 +845,12 @@ pub enum BlockItem {
     },
     Header {
         header_size: BlockHeaderSize,
+        paragraph: Paragraph,
+    },
+    /// A blockquote (originally `> ...` in markdown). Rendered with a left
+    /// accent bar and optional background fill via `RenderableBlockquote`,
+    /// while delegating text rendering to the inner Paragraph.
+    Blockquote {
         paragraph: Paragraph,
     },
     Embedded(Arc<dyn LaidOutEmbeddedItem>),
@@ -1399,7 +1453,7 @@ impl LaidOutTable {
             .unwrap_or(0.0);
 
         let cell_content_start_x = col_start_x + self.config.style.cell_padding;
-        let cell_content_start_y = row_y_start + self.config.style.cell_padding;
+        let cell_content_start_y = row_y_start + self.config.style.cell_padding_y;
         let cell_content_width = (col_width - self.config.style.cell_padding * 2.0).max(0.0);
 
         let x_in_cell = (x - cell_content_start_x).max(0.0);
@@ -1497,7 +1551,7 @@ impl LaidOutTable {
         let row_start_y = self.row_y_offsets.get(row).copied().unwrap_or(0.0);
         vec2f(
             col_start_x + self.config.style.cell_padding + self.cell_alignment_x_offset(row, col),
-            row_start_y + self.config.style.cell_padding,
+            row_start_y + self.config.style.cell_padding_y,
         )
     }
 
@@ -3373,6 +3427,7 @@ impl RichTextStyles {
     pub fn paragraph_styles(&self, block_style: &BufferBlockStyle) -> ParagraphStyles {
         match block_style {
             BufferBlockStyle::PlainText
+            | BufferBlockStyle::Blockquote
             | BufferBlockStyle::UnorderedList { .. }
             | BufferBlockStyle::OrderedList { .. }
             | BufferBlockStyle::TaskList { .. } => self.base_text,
@@ -3474,7 +3529,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::TaskList { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
-            | BlockItem::OrderedList { paragraph, .. } => paragraph.first_line_height(),
+            | BlockItem::OrderedList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.first_line_height(),
             BlockItem::TextBlock { paragraph_block } => paragraph_block.first_line_height(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3498,7 +3554,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::TaskList { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
-            | BlockItem::OrderedList { paragraph, .. } => paragraph.spacing(),
+            | BlockItem::OrderedList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.spacing(),
             BlockItem::TextBlock { paragraph_block } => paragraph_block.spacing(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3529,7 +3586,8 @@ impl BlockItem {
             BlockItem::TextBlock { paragraph_block } => paragraph_block.height(),
             BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. } => paragraph.height(),
+            | BlockItem::TaskList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.height(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             }
@@ -3558,7 +3616,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. } => paragraph.width(),
+            | BlockItem::TaskList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.width(),
             BlockItem::TextBlock { paragraph_block } => paragraph_block.width(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3591,7 +3650,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. } => paragraph.content_length,
+            | BlockItem::TaskList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.content_length,
             BlockItem::TextBlock { paragraph_block } => paragraph_block.content_length(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3613,7 +3673,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. } => paragraph.lines(),
+            | BlockItem::TaskList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.lines(),
             BlockItem::TextBlock { paragraph_block } => paragraph_block.lines(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3637,7 +3698,8 @@ impl BlockItem {
             | BlockItem::Header { paragraph, .. }
             | BlockItem::UnorderedList { paragraph, .. }
             | BlockItem::OrderedList { paragraph, .. }
-            | BlockItem::TaskList { paragraph, .. } => paragraph.is_empty(),
+            | BlockItem::TaskList { paragraph, .. }
+            | BlockItem::Blockquote { paragraph } => paragraph.is_empty(),
             BlockItem::TextBlock { paragraph_block } => paragraph_block.is_empty(),
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
@@ -3689,6 +3751,9 @@ impl Positioned<'_, BlockItem> {
             BlockItem::Header {
                 paragraph: inner, ..
             } => self.header(inner).softwrap_point_to_offset(point),
+            BlockItem::Blockquote { paragraph } => {
+                self.blockquote(paragraph).softwrap_point_to_offset(point)
+            }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => {
@@ -3747,6 +3812,9 @@ impl Positioned<'_, BlockItem> {
                 .offset_to_softwrap_point(offset),
             BlockItem::Header { paragraph, .. } => {
                 self.header(paragraph).offset_to_softwrap_point(offset)
+            }
+            BlockItem::Blockquote { paragraph } => {
+                self.blockquote(paragraph).offset_to_softwrap_point(offset)
             }
             BlockItem::TaskList { paragraph, .. } => {
                 self.task_list(paragraph).offset_to_softwrap_point(offset)
@@ -3809,6 +3877,9 @@ impl Positioned<'_, BlockItem> {
                 self.task_list(paragraph).character_bounds(offset)
             }
             BlockItem::Header { paragraph, .. } => self.header(paragraph).character_bounds(offset),
+            BlockItem::Blockquote { paragraph } => {
+                self.blockquote(paragraph).character_bounds(offset)
+            }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => {
@@ -3873,6 +3944,9 @@ impl Positioned<'_, BlockItem> {
                 self.ordered_list(paragraph).first_line_bounds()?
             }
             BlockItem::Header { paragraph, .. } => self.header(paragraph).first_line_bounds()?,
+            BlockItem::Blockquote { paragraph } => {
+                self.blockquote(paragraph).first_line_bounds()?
+            }
             BlockItem::RunnableCodeBlock {
                 paragraph_block, ..
             } => {

@@ -5928,6 +5928,9 @@ fn convert_text_with_style_to_formatted_text(
         BufferBlockStyle::PlainText => vec![FormattedTextLine::Line(text_to_formatted_fragment(
             text, style,
         ))],
+        BufferBlockStyle::Blockquote => vec![FormattedTextLine::Blockquote(
+            text_to_formatted_fragment(text, style),
+        )],
         BufferBlockStyle::TaskList {
             indent_level,
             complete,

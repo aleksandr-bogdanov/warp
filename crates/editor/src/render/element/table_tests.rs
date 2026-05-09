@@ -76,6 +76,7 @@ fn test_laid_out_table() -> LaidOutTable {
             font_family: FamilyId(0),
             font_size: 14.0,
             cell_padding: 6.0,
+                cell_padding_y: 6.0,
             outer_border: true,
             column_dividers: true,
             row_dividers: true,
